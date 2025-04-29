@@ -6,14 +6,10 @@
 #include <WiFi.h>
 
 #include "secrets.h"
-#include "utilities.h"
 
 // MQTT SERVER
 const char* mqtt_server ="902e1d0dba3944fa88c5f6caac765b57.s1.eu.hivemq.cloud";
 const char* localModId = "67e1f54045d20e4703ad5c4a";
-int globalMoisture;
-bool pumpRunning = false;
-int desiredMoistureThreshold = 0;
 
 const char* ca_cert = R"EOF(
 -----BEGIN CERTIFICATE-----
@@ -99,7 +95,6 @@ void connectToMessageBroker() {
       Serial.println("Broker connected");
 
       client.subscribe("mod/drip/+");
-      client.subscribe("mod/readings/+");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -110,7 +105,6 @@ void connectToMessageBroker() {
   }
 
   client.subscribe("mod/drip/+");
-  client.subscribe("mod/readings/+");
 }
 
 //////////////////////////////////
@@ -141,32 +135,22 @@ void callback(std::string topic, byte* payload, unsigned int length) {
         triggerWaterPump(dripDuration);
       }
     }
-  } else if (topic.find("readings") != std::string::npos) {
-    const char* incomingModId = doc["modId"];
-    int incomingMoisture = doc["moisture"];
-
-    if (strcmp(incomingModId, localModId) == 0) {
-      Serial.println("modId matches this device. Reading moisture...");
-
-      globalMoisture = getMoisturePercentage(incomingMoisture);
-    }
-  }
+  } 
 }
 
 void triggerWaterPump(int dripDuration) {
-    desiredMoistureThreshold = dripDuration;
-    pumpRunning = true;
+    // CONVERT FROM SECONDS TO MILLISECOND
+    int convertedDuration = dripDuration * 1000;
 
     Serial.println("pump on");
     digitalWrite(RELAY_PIN, HIGH);
+
+    delay(convertedDuration);
+
+    Serial.println("pump off");
+    digitalWrite(RELAY_PIN, LOW);
 }
 
 void loop() {
   client.loop();
-
-  if (pumpRunning && globalMoisture >= desiredMoistureThreshold) {
-    pumpRunning = false;
-    Serial.println("pump OFF");
-    digitalWrite(RELAY_PIN, LOW);
-  }
 }
